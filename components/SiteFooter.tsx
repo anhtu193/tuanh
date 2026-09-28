@@ -1,6 +1,6 @@
 export default function SiteFooter() {
   return (
-    <footer className="mt-auto flex flex-col gap-10 pb-4 pt-16">
+    <footer className="mt-auto flex flex-col gap-4 pb-4 pt-16">
       <p className="font-script text-[1.65rem] italic leading-none text-muted">
         more coming soon...
       </p>
