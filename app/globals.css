@@ -1,26 +1,74 @@
 @import "tailwindcss";
+@import "pullcord/pullcord.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
+  --background: #f4f3ef;
   --foreground: #171717;
+  --muted: #8a8680;
+  --pullcord-top: 0px;
+  --pullcord-right: 1.25rem;
+  --pullcord-z: 20;
+  --pullcord-ink: rgba(40, 40, 40, 0.45);
+  color-scheme: light;
+}
+
+.dark {
+  --background: #121212;
+  --foreground: #ededed;
+  --muted: #8a8680;
+  --pullcord-ink: rgba(255, 255, 255, 0.28);
+  color-scheme: dark;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --pullcord-right: 7rem;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-script: var(--font-caveat);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.45s;
+  animation-timing-function: ease;
+}
+
+body {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.cord-hint {
+  position: fixed;
+  top: 9.6rem;
+  right: calc(var(--pullcord-right) + 3.6rem);
+  z-index: calc(var(--pullcord-z) + 1);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  pointer-events: none;
+  user-select: none;
+}
+
+.cord-hint svg {
+  width: 2.1rem;
+  height: 1.7rem;
+  flex-shrink: 0;
+  margin-top: 0.35rem;
 }
