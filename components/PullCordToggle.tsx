@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { PullCord } from "pullcord";
+import { PullCord } from "@/components/PullCord";
 
 const THEME_KEY = "theme";
 
