@@ -59,10 +59,8 @@ export default function ProjectCard({
 
   return (
     <article
-      className={`flex h-full flex-col rounded-[1.35rem] border border-black/5 bg-white p-2.5 dark:border-white/10 dark:bg-[#222] ${
-        active
-          ? "shadow-[0_24px_60px_-28px_rgba(40,30,20,0.55)] dark:shadow-[0_22px_50px_-24px_rgba(0,0,0,0.75)]"
-          : "shadow-[0_10px_28px_-22px_rgba(40,30,20,0.35)] dark:shadow-[0_10px_24px_-18px_rgba(0,0,0,0.55)]"
+      className={`project-card flex h-full flex-col rounded-[1.35rem] border border-black/5 bg-white p-2.5 dark:border-white/10 dark:bg-[#222] ${
+        active ? "project-card--active" : ""
       }`}
     >
       <div className="relative aspect-16/10 overflow-hidden rounded-[0.95rem] bg-foreground/5">

@@ -32,6 +32,13 @@ const DRAG_THRESHOLD = 40;
 const DRAG_START = 6;
 const VELOCITY_THRESHOLD = 500;
 const SPRING = { type: "spring" as const, stiffness: 320, damping: 34 };
+/**
+ * Vertical room under the card for box-shadow. Needed inside `.carousel-stage`
+ * because `perspective` clips 3D-transformed descendants to the stage box.
+ */
+const SHADOW_ROOM = 88;
+/** Horizontal room so mobile overflow clip does not square-cut the card shadow. */
+const SHADOW_X = 40;
 
 function subscribeMedia(query: string, onChange: () => void) {
   const media = window.matchMedia(query);
@@ -143,7 +150,9 @@ function CoverSlide({
   const opacity = useTransform([cursor, mobileMv], (latest) => {
     const [value, mobile] = latest as number[];
     const distance = Math.abs(virtualIndex - value);
-    if (mobile > 0.5) return distance >= 1 ? 0 : 1;
+    // Fade as soon as the slide leaves center. A hard cutoff at 1 kept the
+    // outgoing card fully visible for the whole spring, then popped it off.
+    if (mobile > 0.5) return Math.max(0, 1 - distance);
     if (distance >= 1.35) return 0;
     if (distance >= 1) return 0.55 * (1 - (distance - 1) / 0.35);
     return 1 - distance * 0.45;
@@ -241,7 +250,10 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
     const total = countRef.current;
     if (total <= 1) return;
     const value = cursor.get();
-    const shift = Math.round(value / total) * total;
+    // Stay inside the rendered clones. Wrapping earlier (for example 1 → -1
+    // with 2 projects) swaps the centered DOM node and flashes the card.
+    if (Math.abs(value) < total + 1) return;
+    const shift = Math.trunc(value / total) * total;
     if (shift !== 0) cursor.set(value - shift);
   }, [cursor]);
 
@@ -325,7 +337,8 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
     if (!tracking.current || event.pointerId !== pointerId.current) return;
     const dx = event.clientX - startX.current;
     if (!moved.current) {
-      if (Math.abs(dx) < DRAG_START) return;
+      const startAt = mobileMv.get() > 0.5 ? 16 : DRAG_START;
+      if (Math.abs(dx) < startAt) return;
       moved.current = true;
       event.currentTarget.setPointerCapture(event.pointerId);
     }
@@ -373,12 +386,16 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
   };
 
   const activeProject = count === 0 ? 0 : mod(center, count);
-  const stageHeight = cardHeight > 0 ? cardHeight + (mobile ? 120 : 52) : 480;
+  const stagePadTop = mobile ? 20 : 12;
+  // Shadow must sit inside the stage box — perspective clips anything past it.
+  const stageHeight =
+    cardHeight > 0 ? cardHeight + stagePadTop + SHADOW_ROOM : 480;
 
   return (
     <div
       ref={frameRef}
-      className="relative mt-5 overflow-x-clip max-md:-mx-4 max-md:px-4 sm:max-md:-mx-6 sm:max-md:px-6"
+      className="relative mt-5 max-md:-mx-4 max-md:px-4 sm:max-md:-mx-6 sm:max-md:px-6"
+      // style={{ overflowX: "clip" }}
     >
       {count > 1 ? <DragHint /> : null}
       <div className="relative">
@@ -389,6 +406,14 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
           style={{
             height: stageHeight,
             perspective: flat ? undefined : 2000,
+            ...(mobile && cardWidth > 0
+              ? {
+                  width: cardWidth + SHADOW_X * 2,
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                  overflow: "hidden" as const,
+                }
+              : {}),
           }}
           tabIndex={0}
           role="region"
@@ -428,11 +453,13 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
             <button
               type="button"
               aria-label="Previous project"
-              className="absolute top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-black/5 bg-white text-foreground/80 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.45)] transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/40 dark:border-white/10 dark:bg-[#2a2a2a]"
+              className="absolute z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-black/5 bg-white text-foreground/80 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.45)] transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/40 dark:border-white/10 dark:bg-[#2a2a2a] dark:shadow-[0_10px_28px_rgba(0,0,0,0.65)]"
               style={{
                 left: mobile
                   ? 12
                   : `max(0px, calc(50% - ${stride + cardWidth / 2 + 20}px))`,
+                // Center on the card, not the shadow room under it.
+                top: cardHeight > 0 ? stagePadTop + cardHeight / 2 : "50%",
               }}
               onClick={() => step(-1)}
             >
@@ -441,11 +468,12 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
             <button
               type="button"
               aria-label="Next project"
-              className="absolute top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-black/5 bg-white text-foreground/80 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.45)] transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/40 dark:border-white/10 dark:bg-[#2a2a2a]"
+              className="absolute z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-black/5 bg-white text-foreground/80 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.45)] transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/40 dark:border-white/10 dark:bg-[#2a2a2a] dark:shadow-[0_10px_28px_rgba(0,0,0,0.65)]"
               style={{
                 right: mobile
                   ? 12
                   : `max(0px, calc(50% - ${stride + cardWidth / 2 + 20}px))`,
+                top: cardHeight > 0 ? stagePadTop + cardHeight / 2 : "50%",
               }}
               onClick={() => step(1)}
             >
@@ -455,7 +483,7 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
         ) : null}
       </div>
       {count > 1 ? (
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
           {projects.map((project, index) => (
             <button
               key={project.id}

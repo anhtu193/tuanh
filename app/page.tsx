@@ -13,7 +13,7 @@ export default async function Home() {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 py-16 sm:px-6 md:px-8">
       <main className="flex flex-1 flex-col justify-center">
-        <div className="mx-auto w-full max-w-md">
+        <div className="mx-auto w-full max-w-md max-md:pr-44">
           <h1 className="text-3xl font-semibold tracking-tight">tuanh</h1>
           <p className="mt-4 text-lg leading-8 text-foreground/70 whitespace-pre-line">
             A small place for things I build.
