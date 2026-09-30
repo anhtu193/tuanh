@@ -121,14 +121,6 @@ body {
   overflow: visible;
 }
 
-@media (min-width: 768px) {
-  .carousel-stage {
-    mask-image: linear-gradient(
-      to right,
-      transparent,
-      #000 7%,
-      #000 93%,
-      transparent
-    );
-  }
+.carousel-stage {
+  touch-action: pan-y;
 }

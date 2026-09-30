@@ -1,20 +1,37 @@
 "use client";
 
+/**
+ * Shallow circular coverflow.
+ * Drag, snap, and depth fade follow React Bits Circular Carousel
+ * (MIT, https://github.com/DavidHDev/react-bits) — tuned to a 3-card
+ * window so project text stays readable.
+ */
+
 import ProjectCard from "@/components/projects/ProjectCard";
 import type { Project } from "@/lib/types";
 import {
+  animate,
   motion,
   useMotionValue,
-  type PanInfo,
+  useTransform,
+  type MotionValue,
 } from "motion/react";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
   type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
+
+const DRAG_THRESHOLD = 40;
+const DRAG_START = 6;
+const VELOCITY_THRESHOLD = 500;
+const SPRING = { type: "spring" as const, stiffness: 320, damping: 34 };
 
 function subscribeMedia(query: string, onChange: () => void) {
   const media = window.matchMedia(query);
@@ -26,15 +43,155 @@ function mediaMatches(query: string) {
   return window.matchMedia(query).matches;
 }
 
-const GAP = 18;
-const DRAG_BUFFER = 40;
-const VELOCITY_THRESHOLD = 500;
-const AUTOPLAY_MS = 8000;
-const SPRING = { type: "spring" as const, stiffness: 300, damping: 30 };
+function mod(value: number, count: number) {
+  return ((value % count) + count) % count;
+}
+
+function virtualIndices(count: number) {
+  if (count <= 1) return [0];
+  const indices: number[] = [];
+  for (let index = -count - 2; index <= count + 2; index += 1) {
+    indices.push(index);
+  }
+  return indices;
+}
+
+function Chevron({ dir }: { dir: "left" | "right" }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d={dir === "left" ? "M14.5 6.5 8.5 12l6 5.5" : "M9.5 6.5 15.5 12l-6 5.5"}
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DragHint() {
+  return (
+    <div
+      className="pointer-events-none absolute right-[6%] top-0 z-10 hidden translate-y-[-120%] items-end gap-1 text-[#8b8680] md:flex dark:text-[#9a9590]"
+      aria-hidden="true"
+    >
+      <p className="font-script text-right text-[1.55rem] italic leading-none">
+        drag / browse
+      </p>
+      <svg
+        viewBox="0 0 64 48"
+        className="mb-0.5 h-9 w-12 shrink-0 overflow-visible"
+        fill="none"
+      >
+        <path
+          d="M8 8C24 10 36 20 48 36"
+          stroke="currentColor"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M32 30L50 38L42 18"
+          stroke="currentColor"
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function CoverSlide({
+  virtualIndex,
+  project,
+  cursor,
+  strideMv,
+  flatMv,
+  mobileMv,
+  active,
+  cardWidth,
+  onHeight,
+  mobile,
+}: {
+  virtualIndex: number;
+  project: Project;
+  cursor: MotionValue<number>;
+  strideMv: MotionValue<number>;
+  flatMv: MotionValue<number>;
+  mobileMv: MotionValue<number>;
+  active: boolean;
+  cardWidth: number;
+  onHeight: (virtualIndex: number, height: number) => void;
+  mobile: boolean;
+}) {
+  const x = useTransform([cursor, strideMv], (latest) => {
+    const [value, stride] = latest as number[];
+    return (virtualIndex - value) * stride;
+  });
+  const rotateY = useTransform([cursor, flatMv, mobileMv], (latest) => {
+    const [value, flat, mobile] = latest as number[];
+    if (flat > 0.5 || mobile > 0.5) return 0;
+    return (virtualIndex - value) * 20;
+  });
+  const scale = useTransform([cursor, flatMv, mobileMv], (latest) => {
+    const [value, flat, mobile] = latest as number[];
+    if (flat > 0.5 || mobile > 0.5) return 1;
+    const distance = Math.min(Math.abs(virtualIndex - value), 1);
+    return 1 - distance * 0.08;
+  });
+  const opacity = useTransform([cursor, mobileMv], (latest) => {
+    const [value, mobile] = latest as number[];
+    const distance = Math.abs(virtualIndex - value);
+    if (mobile > 0.5) return distance >= 1 ? 0 : 1;
+    if (distance >= 1.35) return 0;
+    if (distance >= 1) return 0.55 * (1 - (distance - 1) / 0.35);
+    return 1 - distance * 0.45;
+  });
+  const zIndex = useTransform(cursor, (value) => {
+    return 20 - Math.round(Math.abs(virtualIndex - value) * 6);
+  });
+  const nodeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = nodeRef.current;
+    if (!node) return;
+    const report = () => onHeight(virtualIndex, node.offsetHeight);
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [onHeight, virtualIndex, cardWidth]);
+
+  return (
+    <motion.div
+      className="absolute"
+      style={{
+        top: mobile ? 20 : 12,
+        width: cardWidth,
+        left: `calc(50% - ${cardWidth / 2}px)`,
+        x,
+        rotateY,
+        scale,
+        opacity,
+        zIndex,
+        pointerEvents: active ? "auto" : "none",
+      }}
+      aria-hidden={!active}
+      inert={!active}
+    >
+      <div ref={nodeRef}>
+        <ProjectCard project={project} active={active} />
+      </div>
+    </motion.div>
+  );
+}
 
 export default function ProjectsCarousel({ projects }: { projects: Project[] }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [cardHeight, setCardHeight] = useState(0);
+  const [center, setCenter] = useState(0);
   const wide = useSyncExternalStore(
     (onChange) => subscribeMedia("(min-width: 768px)", onChange),
     () => mediaMatches("(min-width: 768px)"),
@@ -45,173 +202,278 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
     () => mediaMatches("(prefers-reduced-motion: reduce)"),
     () => false,
   );
-  const [paused, setPaused] = useState(false);
-  const [position, setPosition] = useState(() => (projects.length > 1 ? 1 : 0));
-  const [jumping, setJumping] = useState(false);
-  const [animating, setAnimating] = useState(false);
-  const x = useMotionValue(0);
 
-  const loop = projects.length > 1;
-  const items = useMemo(() => {
-    if (!loop) return projects;
-    return [projects[projects.length - 1], ...projects, projects[0]];
-  }, [loop, projects]);
+  const count = projects.length;
+  const mobile = !wide;
+  const flat = mobile || reduceMotion;
+  const cardWidth =
+    containerWidth === 0
+      ? 0
+      : mobile
+        ? Math.max(0, containerWidth - 112)
+        : Math.min(340, Math.max(220, Math.round(containerWidth * 0.36)));
+  const stride = mobile ? cardWidth : cardWidth * (reduceMotion ? 0.86 : 0.78);
+
+  const cursor = useMotionValue(0);
+  const strideMv = useMotionValue(stride);
+  const flatMv = useMotionValue(flat ? 1 : 0);
+  const mobileMv = useMotionValue(mobile ? 1 : 0);
+  const countRef = useRef(count);
+  const reduceRef = useRef(reduceMotion);
+  const originRef = useRef(0);
+  const animRef = useRef<ReturnType<typeof animate> | null>(null);
+  const tracking = useRef(false);
+  const moved = useRef(false);
+  const pointerId = useRef<number | null>(null);
+  const startX = useRef(0);
+  const lastX = useRef(0);
+  const lastT = useRef(0);
+  const velocity = useRef(0);
+  const heightsRef = useRef(new Map<number, number>());
+  const animating = useRef(false);
+
+  countRef.current = count;
+  reduceRef.current = reduceMotion;
+
+  const slides = useMemo(() => virtualIndices(count), [count]);
+
+  const normalizeCursor = useCallback(() => {
+    const total = countRef.current;
+    if (total <= 1) return;
+    const value = cursor.get();
+    const shift = Math.round(value / total) * total;
+    if (shift !== 0) cursor.set(value - shift);
+  }, [cursor]);
+
+  const snapTo = useCallback(
+    (target: number) => {
+      animRef.current?.stop();
+      if (reduceRef.current) {
+        cursor.set(target);
+        normalizeCursor();
+        animating.current = false;
+        return;
+      }
+      animating.current = true;
+      animRef.current = animate(cursor, target, {
+        ...SPRING,
+        onComplete: () => {
+          animating.current = false;
+          normalizeCursor();
+        },
+      });
+    },
+    [cursor, normalizeCursor],
+  );
+
+  const step = useCallback(
+    (delta: number) => {
+      if (countRef.current < 2 || animating.current) return;
+      normalizeCursor();
+      snapTo(Math.round(cursor.get()) + delta);
+    },
+    [cursor, normalizeCursor, snapTo],
+  );
 
   useEffect(() => {
-    const element = containerRef.current;
-    if (!element) return;
+    strideMv.set(stride);
+    flatMv.set(flat ? 1 : 0);
+    mobileMv.set(mobile ? 1 : 0);
+  }, [flat, flatMv, mobile, mobileMv, stride, strideMv]);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
     const observer = new ResizeObserver(([entry]) => {
-      setWidth(entry.contentRect.width);
+      setContainerWidth(entry.contentRect.width);
     });
-    observer.observe(element);
+    observer.observe(frame);
     return () => observer.disconnect();
   }, []);
 
-  const itemWidth = width === 0 ? 0 : wide ? Math.round(width * 0.72) : width;
-  const stride = itemWidth + GAP;
-  const centerPad = width === 0 ? 0 : Math.max(0, (width - itemWidth) / 2);
-  const activeIndex =
-    projects.length === 0
-      ? 0
-      : loop
-        ? (position - 1 + projects.length) % projects.length
-        : Math.min(position, projects.length - 1);
-
   useEffect(() => {
-    if (!loop || projects.length < 2 || paused || reduceMotion) return;
-    const timer = window.setInterval(() => {
-      setPosition((current) => current + 1);
-    }, AUTOPLAY_MS);
-    return () => window.clearInterval(timer);
-  }, [loop, paused, projects.length, reduceMotion]);
-
-  const finishJump = (target: number) => {
-    setJumping(true);
-    setPosition(target);
-    x.set(centerPad - target * stride);
-    requestAnimationFrame(() => {
-      setJumping(false);
-      setAnimating(false);
+    return cursor.on("change", (value) => {
+      const next = Math.round(value);
+      setCenter((current) => (current === next ? current : next));
     });
+  }, [cursor]);
+
+  const onHeight = useCallback((virtualIndex: number, height: number) => {
+    if (height <= 0) return;
+    if (heightsRef.current.get(virtualIndex) === height) return;
+    heightsRef.current.set(virtualIndex, height);
+    const max = Math.max(...heightsRef.current.values());
+    setCardHeight((current) => (current === max ? current : max));
+  }, []);
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (count < 2 || event.button !== 0) return;
+    animRef.current?.stop();
+    animating.current = false;
+    normalizeCursor();
+    tracking.current = true;
+    moved.current = false;
+    pointerId.current = event.pointerId;
+    originRef.current = cursor.get();
+    startX.current = event.clientX;
+    lastX.current = event.clientX;
+    lastT.current = performance.now();
+    velocity.current = 0;
   };
 
-  const onAnimationComplete = () => {
-    if (!loop || items.length <= 1) {
-      setAnimating(false);
-      return;
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!tracking.current || event.pointerId !== pointerId.current) return;
+    const dx = event.clientX - startX.current;
+    if (!moved.current) {
+      if (Math.abs(dx) < DRAG_START) return;
+      moved.current = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
     }
-    if (position === items.length - 1) {
-      finishJump(1);
-      return;
+    const now = performance.now();
+    const dt = now - lastT.current;
+    if (dt > 0) {
+      velocity.current = ((event.clientX - lastX.current) / dt) * 1000;
     }
-    if (position === 0) {
-      finishJump(projects.length);
-      return;
-    }
-    setAnimating(false);
+    lastX.current = event.clientX;
+    lastT.current = now;
+    const width = strideMv.get() || 1;
+    cursor.set(originRef.current - dx / width);
   };
 
-  const onDragEnd = (_event: unknown, info: PanInfo) => {
-    const direction =
-      info.offset.x < -DRAG_BUFFER || info.velocity.x < -VELOCITY_THRESHOLD
-        ? 1
-        : info.offset.x > DRAG_BUFFER || info.velocity.x > VELOCITY_THRESHOLD
-          ? -1
-          : 0;
-    if (direction === 0) return;
-    setPosition((current) => {
-      const next = current + direction;
-      return Math.max(0, Math.min(next, items.length - 1));
-    });
+  const finishPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!tracking.current || event.pointerId !== pointerId.current) return;
+    tracking.current = false;
+    pointerId.current = null;
+    if (!moved.current) return;
+    const dx = event.clientX - startX.current;
+    const speed = velocity.current;
+    let delta = 0;
+    if (dx < -DRAG_THRESHOLD || speed < -VELOCITY_THRESHOLD) delta = 1;
+    else if (dx > DRAG_THRESHOLD || speed > VELOCITY_THRESHOLD) delta = -1;
+    snapTo(Math.round(originRef.current) + delta);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (projects.length < 2) return;
+    if (count < 2) return;
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      setPosition((current) => Math.min(current + 1, items.length - 1));
+      step(1);
     }
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      setPosition((current) => Math.max(current - 1, 0));
+      step(-1);
     }
   };
 
-  const transition = jumping || reduceMotion ? { duration: 0 } : SPRING;
-  const targetX = centerPad - position * stride;
+  const onClickCapture = (event: MouseEvent<HTMLDivElement>) => {
+    if (!moved.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    moved.current = false;
+  };
+
+  const activeProject = count === 0 ? 0 : mod(center, count);
+  const stageHeight = cardHeight > 0 ? cardHeight + (mobile ? 120 : 52) : 480;
 
   return (
     <div
-      className="mt-5"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setPaused(false);
-        }
-      }}
+      ref={frameRef}
+      className="relative mt-5 overflow-x-clip max-md:-mx-4 max-md:px-4 sm:max-md:-mx-6 sm:max-md:px-6"
     >
-      <div
-        ref={containerRef}
-        className="carousel-stage cursor-grab overflow-hidden outline-none active:cursor-grabbing focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground/40"
-        tabIndex={0}
-        role="region"
-        aria-roledescription="carousel"
-        aria-label="Projects"
-        onKeyDown={onKeyDown}
-      >
-        {itemWidth === 0 ? (
-          <div className="w-full md:w-[72%]">
-            <ProjectCard project={projects[0]} />
-          </div>
-        ) : (
-          <motion.div
-            className="flex touch-pan-y"
-            drag={projects.length > 1 && !animating ? "x" : false}
-            dragConstraints={
-              loop
-                ? undefined
-                : {
-                    left: centerPad - stride * Math.max(items.length - 1, 0),
-                    right: centerPad,
-                  }
-            }
-            dragElastic={0.12}
-            style={{ x, gap: GAP }}
-            animate={{ x: targetX }}
-            transition={transition}
-            onDragEnd={onDragEnd}
-            onAnimationStart={() => setAnimating(true)}
-            onAnimationComplete={onAnimationComplete}
-          >
-            {items.map((project, index) => (
-              <div
-                key={`${project.id}-${index}`}
-                className="shrink-0"
-                style={{ width: itemWidth }}
-                aria-hidden={index !== position}
-              >
-                <ProjectCard project={project} active={index === position} />
-              </div>
-            ))}
-          </motion.div>
-        )}
+      {count > 1 ? <DragHint /> : null}
+      <div className="relative">
+        <div
+          className={`carousel-stage relative outline-none select-none ${
+            count > 1 ? "cursor-grab active:cursor-grabbing" : ""
+          } focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground/40`}
+          style={{
+            height: stageHeight,
+            perspective: flat ? undefined : 2000,
+          }}
+          tabIndex={0}
+          role="region"
+          aria-roledescription="carousel"
+          aria-label="Projects"
+          onKeyDown={onKeyDown}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={finishPointer}
+          onPointerCancel={finishPointer}
+          onClickCapture={onClickCapture}
+        >
+          {cardWidth > 0
+            ? slides.map((virtualIndex) => {
+                const project = projects[mod(virtualIndex, count)];
+                if (!project) return null;
+                return (
+                  <CoverSlide
+                    key={virtualIndex}
+                    virtualIndex={virtualIndex}
+                    project={project}
+                    cursor={cursor}
+                    strideMv={strideMv}
+                    flatMv={flatMv}
+                    mobileMv={mobileMv}
+                    active={virtualIndex === center}
+                    cardWidth={cardWidth}
+                    onHeight={onHeight}
+                    mobile={mobile}
+                  />
+                );
+              })
+            : null}
+        </div>
+        {count > 1 ? (
+          <>
+            <button
+              type="button"
+              aria-label="Previous project"
+              className="absolute top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-black/5 bg-white text-foreground/80 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.45)] transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/40 dark:border-white/10 dark:bg-[#2a2a2a]"
+              style={{
+                left: mobile
+                  ? 12
+                  : `max(0px, calc(50% - ${stride + cardWidth / 2 + 20}px))`,
+              }}
+              onClick={() => step(-1)}
+            >
+              <Chevron dir="left" />
+            </button>
+            <button
+              type="button"
+              aria-label="Next project"
+              className="absolute top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-black/5 bg-white text-foreground/80 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.45)] transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/40 dark:border-white/10 dark:bg-[#2a2a2a]"
+              style={{
+                right: mobile
+                  ? 12
+                  : `max(0px, calc(50% - ${stride + cardWidth / 2 + 20}px))`,
+              }}
+              onClick={() => step(1)}
+            >
+              <Chevron dir="right" />
+            </button>
+          </>
+        ) : null}
       </div>
-      {projects.length > 1 ? (
+      {count > 1 ? (
         <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
           {projects.map((project, index) => (
             <button
               key={project.id}
               type="button"
               aria-label={`Go to ${project.title}`}
-              aria-current={activeIndex === index ? "true" : undefined}
-              className={`h-1.5 rounded-full transition-[width,background-color] duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/40 ${
-                activeIndex === index
+              aria-current={activeProject === index ? "true" : undefined}
+              className={`h-1.5 cursor-pointer rounded-full transition-[width,background-color] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/40 ${
+                activeProject === index
                   ? "w-4 bg-foreground/55"
                   : "w-1.5 bg-foreground/18"
               }`}
-              onClick={() => setPosition(loop ? index + 1 : index)}
+              onClick={() => {
+                const current = mod(Math.round(cursor.get()), count);
+                let delta = index - current;
+                if (delta > count / 2) delta -= count;
+                if (delta < -count / 2) delta += count;
+                step(delta);
+              }}
             />
           ))}
         </div>
