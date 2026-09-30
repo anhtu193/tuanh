@@ -101,8 +101,10 @@ export function PullCord({
   const knobGradId = `pc-knob-${uid}`;
   const knobShadowId = `pc-knob-sh-${uid}`;
 
-  const cfgRef = useRef({ ...DEFAULT_CONFIG });
-  Object.assign(cfgRef.current, DEFAULT_CONFIG, config);
+  const cfgRef = useRef({ ...DEFAULT_CONFIG, ...config });
+  useEffect(() => {
+    Object.assign(cfgRef.current, DEFAULT_CONFIG, config);
+  }, [config]);
 
   const knobRef = useRef<HTMLButtonElement>(null);
   const cordRef = useRef<SVGPathElement>(null);
@@ -113,7 +115,9 @@ export function PullCord({
   const target = useRef({ x: ANCHOR_X, y: REST_Y });
   const wake = useRef(() => {});
   const onPullRef = useRef(onPull);
-  onPullRef.current = onPull;
+  useEffect(() => {
+    onPullRef.current = onPull;
+  }, [onPull]);
 
   const nodesRef = useRef<Node[] | null>(null);
   if (nodesRef.current === null) nodesRef.current = makeNodes();

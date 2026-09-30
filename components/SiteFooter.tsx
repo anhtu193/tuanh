@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function SiteFooter() {
   return (
     <footer className="mt-auto flex flex-col gap-4 pb-4 pt-16">
@@ -6,7 +8,7 @@ export default function SiteFooter() {
       </p>
       <p className="font-script text-muted">
         <span className="mr-1.5 text-lg italic">made by</span>
-        <a
+        <Link
           href="/"
           className="group relative inline-block cursor-pointer text-[2rem] leading-none text-foreground/80 no-underline"
         >
@@ -15,7 +17,7 @@ export default function SiteFooter() {
             aria-hidden="true"
             className="pointer-events-none absolute -bottom-0.5 left-0 h-[1.5px] w-full origin-left scale-x-0 rotate-[-4deg] bg-current transition-transform duration-200 ease-out group-hover:scale-x-100"
           />
-        </a>
+        </Link>
       </p>
     </footer>
   );
