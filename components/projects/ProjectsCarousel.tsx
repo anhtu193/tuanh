@@ -31,6 +31,7 @@ import {
 const DRAG_THRESHOLD = 40;
 const DRAG_START = 6;
 const VELOCITY_THRESHOLD = 500;
+const AUTO_SLIDE_MS = 2000;
 const SPRING = { type: "spring" as const, stiffness: 320, damping: 34 };
 /**
  * Vertical room under the card for box-shadow. Needed inside `.carousel-stage`
@@ -39,6 +40,16 @@ const SPRING = { type: "spring" as const, stiffness: 320, damping: 34 };
 const SHADOW_ROOM = 88;
 /** Horizontal room so mobile overflow clip does not square-cut the card shadow. */
 const SHADOW_X = 40;
+/**
+ * Slides past this offset are fully faded. Parking them here keeps a backward
+ * step from translating clones further right and growing the page scroll width.
+ */
+const FAN_LIMIT = 1.35;
+
+function fanDelta(virtualIndex: number, value: number) {
+  const delta = virtualIndex - value;
+  return Math.min(FAN_LIMIT, Math.max(-FAN_LIMIT, delta));
+}
 
 function subscribeMedia(query: string, onChange: () => void) {
   const media = window.matchMedia(query);
@@ -134,12 +145,12 @@ function CoverSlide({
 }) {
   const x = useTransform([cursor, strideMv], (latest) => {
     const [value, stride] = latest as number[];
-    return (virtualIndex - value) * stride;
+    return fanDelta(virtualIndex, value) * stride;
   });
   const rotateY = useTransform([cursor, flatMv, mobileMv], (latest) => {
     const [value, flat, mobile] = latest as number[];
     if (flat > 0.5 || mobile > 0.5) return 0;
-    return (virtualIndex - value) * 20;
+    return fanDelta(virtualIndex, value) * 20;
   });
   const scale = useTransform([cursor, flatMv, mobileMv], (latest) => {
     const [value, flat, mobile] = latest as number[];
@@ -153,8 +164,8 @@ function CoverSlide({
     // Fade as soon as the slide leaves center. A hard cutoff at 1 kept the
     // outgoing card fully visible for the whole spring, then popped it off.
     if (mobile > 0.5) return Math.max(0, 1 - distance);
-    if (distance >= 1.35) return 0;
-    if (distance >= 1) return 0.55 * (1 - (distance - 1) / 0.35);
+    if (distance >= FAN_LIMIT) return 0;
+    if (distance >= 1) return 0.55 * (1 - (distance - 1) / (FAN_LIMIT - 1));
     return 1 - distance * 0.45;
   });
   const zIndex = useTransform(cursor, (value) => {
@@ -240,6 +251,9 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
   const velocity = useRef(0);
   const heightsRef = useRef(new Map<number, number>());
   const animating = useRef(false);
+  const hovered = useRef(false);
+  const focused = useRef(false);
+  const autoTimer = useRef<number | null>(null);
 
   countRef.current = count;
   reduceRef.current = reduceMotion;
@@ -287,6 +301,30 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
     [cursor, normalizeCursor, snapTo],
   );
 
+  const stopAuto = useCallback(() => {
+    if (autoTimer.current == null) return;
+    window.clearTimeout(autoTimer.current);
+    autoTimer.current = null;
+  }, []);
+
+  const scheduleAuto = useCallback(() => {
+    stopAuto();
+    if (
+      countRef.current < 2 ||
+      reduceRef.current ||
+      tracking.current ||
+      hovered.current ||
+      focused.current
+    ) {
+      return;
+    }
+    autoTimer.current = window.setTimeout(() => {
+      if (tracking.current || hovered.current || focused.current) return;
+      step(1);
+      scheduleAuto();
+    }, AUTO_SLIDE_MS);
+  }, [step, stopAuto]);
+
   useEffect(() => {
     strideMv.set(stride);
     flatMv.set(flat ? 1 : 0);
@@ -310,6 +348,19 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
     });
   }, [cursor]);
 
+  useEffect(() => {
+    scheduleAuto();
+    const onVisibility = () => {
+      if (document.hidden) stopAuto();
+      else scheduleAuto();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      stopAuto();
+    };
+  }, [count, reduceMotion, scheduleAuto, stopAuto]);
+
   const onHeight = useCallback((virtualIndex: number, height: number) => {
     if (height <= 0) return;
     if (heightsRef.current.get(virtualIndex) === height) return;
@@ -320,6 +371,7 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (count < 2 || event.button !== 0) return;
+    stopAuto();
     animRef.current?.stop();
     animating.current = false;
     normalizeCursor();
@@ -364,6 +416,7 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
     if (dx < -DRAG_THRESHOLD || speed < -VELOCITY_THRESHOLD) delta = 1;
     else if (dx > DRAG_THRESHOLD || speed > VELOCITY_THRESHOLD) delta = -1;
     snapTo(Math.round(originRef.current) + delta);
+    scheduleAuto();
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -371,10 +424,12 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
     if (event.key === "ArrowRight") {
       event.preventDefault();
       step(1);
+      scheduleAuto();
     }
     if (event.key === "ArrowLeft") {
       event.preventDefault();
       step(-1);
+      scheduleAuto();
     }
   };
 
@@ -395,7 +450,14 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
     <div
       ref={frameRef}
       className="relative mt-5 max-md:-mx-4 max-md:px-4 sm:max-md:-mx-6 sm:max-md:px-6"
-      // style={{ overflowX: "clip" }}
+      onMouseEnter={() => {
+        hovered.current = true;
+        stopAuto();
+      }}
+      onMouseLeave={() => {
+        hovered.current = false;
+        scheduleAuto();
+      }}
     >
       {count > 1 ? <DragHint /> : null}
       <div className="relative">
@@ -425,6 +487,14 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
           onPointerUp={finishPointer}
           onPointerCancel={finishPointer}
           onClickCapture={onClickCapture}
+          onFocus={() => {
+            focused.current = true;
+            stopAuto();
+          }}
+          onBlur={() => {
+            focused.current = false;
+            scheduleAuto();
+          }}
         >
           {cardWidth > 0
             ? slides.map((virtualIndex) => {
@@ -461,7 +531,10 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
                 // Center on the card, not the shadow room under it.
                 top: cardHeight > 0 ? stagePadTop + cardHeight / 2 : "50%",
               }}
-              onClick={() => step(-1)}
+              onClick={() => {
+                step(-1);
+                scheduleAuto();
+              }}
             >
               <Chevron dir="left" />
             </button>
@@ -475,7 +548,10 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
                   : `max(0px, calc(50% - ${stride + cardWidth / 2 + 20}px))`,
                 top: cardHeight > 0 ? stagePadTop + cardHeight / 2 : "50%",
               }}
-              onClick={() => step(1)}
+              onClick={() => {
+                step(1);
+                scheduleAuto();
+              }}
             >
               <Chevron dir="right" />
             </button>
@@ -501,6 +577,7 @@ export default function ProjectsCarousel({ projects }: { projects: Project[] }) 
                 if (delta > count / 2) delta -= count;
                 if (delta < -count / 2) delta += count;
                 step(delta);
+                scheduleAuto();
               }}
             />
           ))}

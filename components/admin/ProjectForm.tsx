@@ -3,10 +3,17 @@
 import TagInput from "@/components/admin/TagInput";
 import type { Project } from "@/lib/types";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const fieldClass =
   "w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-foreground/40";
+
+const ACCEPTED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
 
 type UploadState = "idle" | "uploading" | "success" | "failed";
 
@@ -20,6 +27,22 @@ type FormState = {
   imagePublicId: string;
   visible: boolean;
 };
+
+function isAcceptedImage(file: File) {
+  if (ACCEPTED_IMAGE_TYPES.has(file.type)) return true;
+  return /\.(jpe?g|png|webp|avif)$/i.test(file.name);
+}
+
+function imageFromTransfer(data: DataTransfer | null) {
+  if (!data) return undefined;
+  const fromItems = Array.from(data.items)
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file instanceof File);
+  return [...fromItems, ...Array.from(data.files)].find((file) =>
+    isAcceptedImage(file),
+  );
+}
 
 function formFromProject(project: Project | null): FormState {
   if (!project) {
@@ -62,6 +85,8 @@ export default function ProjectForm({
   const [uploadError, setUploadError] = useState("");
   const [formError, setFormError] = useState("");
   const [pending, setPending] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const onFileRef = useRef<(file: File | undefined) => void>(() => {});
 
   function goDashboard() {
     router.push("/dashboard");
@@ -70,6 +95,11 @@ export default function ProjectForm({
 
   async function onFile(file: File | undefined) {
     if (!file) return;
+    if (!isAcceptedImage(file)) {
+      setFormError("Use a JPG, PNG, WebP, or AVIF image");
+      return;
+    }
+    setFormError("");
     const localPreview = URL.createObjectURL(file);
     setPreviewUrl(localPreview);
     setUploadState("uploading");
@@ -101,6 +131,53 @@ export default function ProjectForm({
     } finally {
       URL.revokeObjectURL(localPreview);
     }
+  }
+
+  onFileRef.current = onFile;
+
+  useEffect(() => {
+    function onPaste(event: ClipboardEvent) {
+      const file = imageFromTransfer(event.clipboardData);
+      if (!file) return;
+      const target = event.target;
+      const editingText =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+      const pastedText = event.clipboardData?.getData("text/plain") ?? "";
+      if (editingText && pastedText.trim()) return;
+      event.preventDefault();
+      onFileRef.current(file);
+    }
+
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
+
+  function onFormDragOver(event: React.DragEvent<HTMLFormElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setDragging(true);
+  }
+
+  function onFormDragLeave(event: React.DragEvent<HTMLFormElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
+    setDragging(false);
+  }
+
+  function onFormDrop(event: React.DragEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDragging(false);
+    if (!event.dataTransfer.types.includes("Files")) return;
+    const file = imageFromTransfer(event.dataTransfer);
+    if (!file) {
+      setFormError("Use a JPG, PNG, WebP, or AVIF image");
+      return;
+    }
+    onFile(file);
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -158,7 +235,13 @@ export default function ProjectForm({
           : "";
 
   return (
-    <form onSubmit={onSubmit} className="flex w-full flex-col gap-4">
+    <form
+      onSubmit={onSubmit}
+      onDragOver={onFormDragOver}
+      onDragLeave={onFormDragLeave}
+      onDrop={onFormDrop}
+      className="flex w-full flex-col gap-4"
+    >
       <h1 className="text-2xl font-semibold tracking-tight">
         {editing ? "Edit project" : "Add project"}
       </h1>
@@ -202,7 +285,10 @@ export default function ProjectForm({
         />
       </label>
       <label className="flex flex-col gap-1.5 text-sm">
-        GitHub URL
+        <span>
+          GitHub URL{" "}
+          <span className="text-foreground/45">(optional)</span>
+        </span>
         <input
           className={fieldClass}
           inputMode="url"
@@ -249,7 +335,11 @@ export default function ProjectForm({
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border border-dashed border-foreground/20 text-foreground/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/40"
+          className={`relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border border-dashed text-foreground/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground/40 ${
+            dragging
+              ? "border-foreground/50 bg-foreground/5"
+              : "border-foreground/20"
+          }`}
         >
           {previewUrl ? (
             // Preview can be a local blob or a Cloudinary URL.
@@ -257,15 +347,20 @@ export default function ProjectForm({
             <img
               src={previewUrl}
               alt=""
-              className="h-full w-full object-cover"
+              className="pointer-events-none h-full w-full object-cover"
             />
           ) : (
             <span className="px-6 text-center leading-6">
-              Click to upload
+              Click, paste, or drop an image
               <br />
               <span className="text-xs">JPG / PNG / WebP / AVIF</span>
             </span>
           )}
+          {dragging ? (
+            <span className="absolute inset-0 flex items-center justify-center bg-background/80 text-sm">
+              Drop image
+            </span>
+          ) : null}
         </button>
         <input
           ref={fileRef}
