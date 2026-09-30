@@ -1,7 +1,7 @@
 import { getSessionUser, isSameOrigin } from "@/lib/auth";
 import { deleteProjectImage } from "@/lib/cloudinary";
 import { jsonError } from "@/lib/http";
-import { deleteProject, getProject, updateProject } from "@/lib/projects";
+import { deleteProject, getProject, updateProject, countProjectsByPublicId } from "@/lib/projects";
 import { parseProjectInput, ValidationError } from "@/lib/validate";
 import { revalidatePath } from "next/cache";
 
@@ -44,10 +44,16 @@ export async function PATCH(request: Request, context: Context) {
       existing.imagePublicId &&
       existing.imagePublicId !== project.imagePublicId
     ) {
-      try {
-        await deleteProjectImage(existing.imagePublicId);
-      } catch (error) {
-        console.error("Could not delete the previous cover image", error);
+      const remaining = await countProjectsByPublicId(
+        existing.imagePublicId,
+        project.id,
+      );
+      if (remaining === 0) {
+        try {
+          await deleteProjectImage(existing.imagePublicId);
+        } catch (error) {
+          console.error("Could not delete the previous cover image", error);
+        }
       }
     }
 
@@ -70,7 +76,13 @@ export async function DELETE(request: Request, context: Context) {
     const existing = await getProject(id);
     if (!existing) return jsonError(404, "Project not found");
     if (existing.imagePublicId) {
-      await deleteProjectImage(existing.imagePublicId);
+      const remaining = await countProjectsByPublicId(
+        existing.imagePublicId,
+        existing.id,
+      );
+      if (remaining === 0) {
+        await deleteProjectImage(existing.imagePublicId);
+      }
     }
     await deleteProject(id);
     revalidatePath("/");

@@ -140,6 +140,41 @@ export async function updateProject(id: string, input: ProjectInput) {
   return row ? mapProject(row) : null;
 }
 
+export async function duplicateProject(id: string) {
+  const existing = await getProject(id);
+  if (!existing) return null;
+
+  return createProject({
+    title: `${existing.title} (copy)`,
+    description: existing.description,
+    projectUrl: existing.projectUrl,
+    githubUrl: existing.githubUrl,
+    imageUrl: existing.imageUrl,
+    imagePublicId: existing.imagePublicId,
+    technologies: existing.technologies,
+  });
+}
+
+export async function countProjectsByPublicId(
+  publicId: string,
+  ignoreId?: string,
+) {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = ignoreId
+    ? await sql`
+        SELECT COUNT(*)::int AS count
+        FROM projects
+        WHERE image_public_id = ${publicId} AND id <> ${ignoreId}
+      `
+    : await sql`
+        SELECT COUNT(*)::int AS count
+        FROM projects
+        WHERE image_public_id = ${publicId}
+      `;
+  return Number(rows[0]?.count ?? 0);
+}
+
 export async function deleteProject(id: string) {
   await ensureSchema();
   const existing = await getProject(id);

@@ -18,9 +18,14 @@ export default async function DashboardPage() {
     redirect("/admin");
   }
 
+  const projects = await listProjects();
+
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center px-6 py-16">
-      <ProjectDashboard initialProjects={await listProjects()} />
+    <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col px-6 py-16">
+      <ProjectDashboard
+        key={projects.map((project) => project.id).join()}
+        initialProjects={projects}
+      />
     </div>
   );
 }

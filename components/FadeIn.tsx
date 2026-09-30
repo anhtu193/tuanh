@@ -1,7 +1,11 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
+
+function subscribe() {
+  return () => {};
+}
 
 export default function FadeIn({
   children,
@@ -13,11 +17,7 @@ export default function FadeIn({
   delay?: number;
 }) {
   const reduceMotion = useReducedMotion();
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    setReady(true);
-  }, []);
+  const ready = useSyncExternalStore(subscribe, () => true, () => false);
 
   if (!ready || reduceMotion) {
     return <div className={className}>{children}</div>;
