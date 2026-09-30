@@ -12,6 +12,7 @@ type ProjectRow = {
   image_url: string;
   image_public_id: string | null;
   technologies: unknown;
+  visible: boolean | null;
   created_at: string | Date;
   updated_at: string | Date;
 };
@@ -35,6 +36,7 @@ function mapProject(row: ProjectRow): Project {
     imageUrl: row.image_url,
     imagePublicId: row.image_public_id ?? undefined,
     technologies,
+    visible: row.visible !== false,
     createdAt: asIso(row.created_at),
     updatedAt: asIso(row.updated_at),
   };
@@ -42,7 +44,7 @@ function mapProject(row: ProjectRow): Project {
 
 const projectColumns = `
   id, title, slug, description, project_url, github_url, image_url,
-  image_public_id, technologies, created_at, updated_at
+  image_public_id, technologies, visible, created_at, updated_at
 `;
 
 async function uniqueSlug(title: string, ignoreId?: string) {
@@ -63,14 +65,21 @@ async function uniqueSlug(title: string, ignoreId?: string) {
   return `${base}-${n}`;
 }
 
-export async function listProjects() {
+export async function listProjects(options?: { visibleOnly?: boolean }) {
   await ensureSchema();
   const sql = getSql();
-  const rows = await sql`
-    SELECT ${sql.unsafe(projectColumns)}
-    FROM projects
-    ORDER BY created_at DESC
-  `;
+  const rows = options?.visibleOnly
+    ? await sql`
+        SELECT ${sql.unsafe(projectColumns)}
+        FROM projects
+        WHERE visible = true
+        ORDER BY created_at DESC
+      `
+    : await sql`
+        SELECT ${sql.unsafe(projectColumns)}
+        FROM projects
+        ORDER BY created_at DESC
+      `;
   return (rows as ProjectRow[]).map(mapProject);
 }
 
@@ -96,7 +105,7 @@ export async function createProject(input: ProjectInput) {
   const rows = await sql`
     INSERT INTO projects (
       id, title, slug, description, project_url, github_url, image_url,
-      image_public_id, technologies, created_at, updated_at
+      image_public_id, technologies, visible, created_at, updated_at
     ) VALUES (
       ${id},
       ${input.title},
@@ -107,6 +116,7 @@ export async function createProject(input: ProjectInput) {
       ${input.imageUrl},
       ${input.imagePublicId ?? null},
       ${JSON.stringify(input.technologies)}::jsonb,
+      ${input.visible},
       ${now},
       ${now}
     )
@@ -132,6 +142,22 @@ export async function updateProject(id: string, input: ProjectInput) {
       image_url = ${input.imageUrl},
       image_public_id = ${input.imagePublicId ?? null},
       technologies = ${JSON.stringify(input.technologies)}::jsonb,
+      visible = ${input.visible},
+      updated_at = ${now}
+    WHERE id = ${id}
+    RETURNING ${sql.unsafe(projectColumns)}
+  `;
+  const row = rows[0] as ProjectRow | undefined;
+  return row ? mapProject(row) : null;
+}
+
+export async function setProjectVisibility(id: string, visible: boolean) {
+  await ensureSchema();
+  const sql = getSql();
+  const now = new Date().toISOString();
+  const rows = await sql`
+    UPDATE projects SET
+      visible = ${visible},
       updated_at = ${now}
     WHERE id = ${id}
     RETURNING ${sql.unsafe(projectColumns)}
@@ -152,6 +178,7 @@ export async function duplicateProject(id: string) {
     imageUrl: existing.imageUrl,
     imagePublicId: existing.imagePublicId,
     technologies: existing.technologies,
+    visible: false,
   });
 }
 

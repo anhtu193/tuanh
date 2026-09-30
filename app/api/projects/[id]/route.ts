@@ -1,7 +1,13 @@
 import { getSessionUser, isSameOrigin } from "@/lib/auth";
 import { deleteProjectImage } from "@/lib/cloudinary";
 import { jsonError } from "@/lib/http";
-import { deleteProject, getProject, updateProject, countProjectsByPublicId } from "@/lib/projects";
+import {
+  countProjectsByPublicId,
+  deleteProject,
+  getProject,
+  setProjectVisibility,
+  updateProject,
+} from "@/lib/projects";
 import { parseProjectInput, ValidationError } from "@/lib/validate";
 import { revalidatePath } from "next/cache";
 
@@ -21,6 +27,15 @@ async function guard(request: Request) {
   return null;
 }
 
+function isVisibilityOnly(
+  body: unknown,
+): body is { visible: boolean } {
+  if (!body || typeof body !== "object") return false;
+  const record = body as Record<string, unknown>;
+  const keys = Object.keys(record);
+  return keys.length === 1 && typeof record.visible === "boolean";
+}
+
 export async function PATCH(request: Request, context: Context) {
   const denied = await guard(request);
   if (denied) return denied;
@@ -36,6 +51,14 @@ export async function PATCH(request: Request, context: Context) {
   try {
     const existing = await getProject(id);
     if (!existing) return jsonError(404, "Project not found");
+
+    if (isVisibilityOnly(body)) {
+      const project = await setProjectVisibility(id, body.visible);
+      if (!project) return jsonError(404, "Project not found");
+      revalidatePath("/");
+      return Response.json({ project });
+    }
+
     const input = parseProjectInput(body);
     const project = await updateProject(id, input);
     if (!project) return jsonError(404, "Project not found");

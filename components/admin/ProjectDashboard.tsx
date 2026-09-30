@@ -77,6 +77,49 @@ export default function ProjectDashboard({
     }
   }
 
+  async function toggleVisibility(project: Project) {
+    setPendingId(project.id);
+    setError("");
+    setConfirmId(null);
+    const nextVisible = !project.visible;
+    setProjects((current) =>
+      current.map((item) =>
+        item.id === project.id ? { ...item, visible: nextVisible } : item,
+      ),
+    );
+    try {
+      const response = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visible: nextVisible }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setProjects((current) =>
+          current.map((item) =>
+            item.id === project.id
+              ? { ...item, visible: project.visible }
+              : item,
+          ),
+        );
+        setError(payload?.error ?? "Could not update visibility");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setProjects((current) =>
+        current.map((item) =>
+          item.id === project.id ? { ...item, visible: project.visible } : item,
+        ),
+      );
+      setError("Could not update visibility");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   return (
     <div className="flex w-full flex-col gap-8">
       <header className="flex items-start justify-between gap-4">
@@ -123,7 +166,9 @@ export default function ProjectDashboard({
             return (
               <li
                 key={project.id}
-                className="rounded-xl border border-foreground/10 bg-background/50 p-3 transition-colors hover:border-foreground/20"
+                className={`rounded-xl border border-foreground/10 bg-background/50 p-3 transition-colors hover:border-foreground/20 ${
+                  project.visible ? "" : "opacity-60"
+                }`}
               >
                 <div className="flex gap-3.5">
                   <div className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-lg border border-foreground/10 bg-foreground/3 sm:w-32">
@@ -137,9 +182,20 @@ export default function ProjectDashboard({
                     ) : null}
                   </div>
                   <div className="min-w-0 flex-1 self-center">
-                    <p className="truncate text-[0.95rem] font-medium tracking-tight">
-                      {project.title}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-[0.95rem] font-medium tracking-tight">
+                        {project.title}
+                      </p>
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide ${
+                          project.visible
+                            ? "bg-foreground/8 text-foreground/60"
+                            : "bg-foreground/5 text-foreground/40"
+                        }`}
+                      >
+                        {project.visible ? "Visible" : "Hidden"}
+                      </span>
+                    </div>
                     {project.technologies.length > 0 ? (
                       <p className="mt-1 truncate text-xs text-foreground/50">
                         {project.technologies.join(" · ")}
@@ -174,6 +230,14 @@ export default function ProjectDashboard({
                         >
                           Edit
                         </Link>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => toggleVisibility(project)}
+                          className={actionClass}
+                        >
+                          {project.visible ? "Hide" : "Show"}
+                        </button>
                         <button
                           type="button"
                           disabled={busy}

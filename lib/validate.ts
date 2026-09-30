@@ -105,6 +105,14 @@ export function parseProjectInput(body: unknown): ProjectInput {
     return tag;
   });
 
+  let visible = true;
+  if (record.visible != null) {
+    if (typeof record.visible !== "boolean") {
+      throw validationError("Visibility must be true or false");
+    }
+    visible = record.visible;
+  }
+
   return {
     title,
     description,
@@ -113,6 +121,7 @@ export function parseProjectInput(body: unknown): ProjectInput {
     imageUrl,
     imagePublicId,
     technologies,
+    visible,
   };
 }
 

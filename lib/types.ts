@@ -8,6 +8,7 @@ export type Project = {
   imageUrl: string;
   imagePublicId?: string;
   technologies: string[];
+  visible: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -20,4 +21,5 @@ export type ProjectInput = {
   imageUrl: string;
   imagePublicId?: string;
   technologies: string[];
+  visible: boolean;
 };

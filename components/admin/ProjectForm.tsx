@@ -18,6 +18,7 @@ type FormState = {
   technologies: string[];
   imageUrl: string;
   imagePublicId: string;
+  visible: boolean;
 };
 
 function formFromProject(project: Project | null): FormState {
@@ -30,6 +31,7 @@ function formFromProject(project: Project | null): FormState {
       technologies: [],
       imageUrl: "",
       imagePublicId: "",
+      visible: true,
     };
   }
   return {
@@ -40,6 +42,7 @@ function formFromProject(project: Project | null): FormState {
     technologies: project.technologies,
     imageUrl: project.imageUrl,
     imagePublicId: project.imagePublicId ?? "",
+    visible: project.visible,
   };
 }
 
@@ -126,6 +129,7 @@ export default function ProjectForm({
             technologies: form.technologies,
             imageUrl: form.imageUrl,
             imagePublicId: form.imagePublicId,
+            visible: form.visible,
           }),
         },
       );
@@ -220,6 +224,26 @@ export default function ProjectForm({
           }
         />
       </div>
+      <label className="flex items-start gap-3 rounded-lg border border-foreground/10 px-3 py-3 text-sm">
+        <input
+          type="checkbox"
+          checked={form.visible}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              visible: event.target.checked,
+            }))
+          }
+          className="mt-0.5 size-4 accent-foreground"
+        />
+        <span>
+          <span className="font-medium">Show on website</span>
+          <span className="mt-0.5 block text-xs text-foreground/55">
+            Hidden projects stay in the dashboard but do not appear on the home
+            page.
+          </span>
+        </span>
+      </label>
       <div className="flex flex-col gap-1.5 text-sm">
         Cover image
         <button

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function Home() {
-  const projects = await listProjects();
+  const projects = await listProjects({ visibleOnly: true });
   const hasProjects = projects.length > 0;
 
   return (
