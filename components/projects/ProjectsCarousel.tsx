@@ -76,28 +76,28 @@ function DragHint() {
       className="pointer-events-none absolute right-[6%] top-0 z-10 hidden translate-y-[-120%] items-end gap-1 text-[#8b8680] md:flex dark:text-[#9a9590]"
       aria-hidden="true"
     >
-      <p className="font-script text-right text-[1.55rem] italic leading-none">
-        drag / browse
-      </p>
       <svg
         viewBox="0 0 64 48"
-        className="mb-0.5 h-9 w-12 shrink-0 overflow-visible"
+        className="h-5 w-7 shrink-0 overflow-visible"
         fill="none"
       >
         <path
-          d="M8 8C24 10 36 20 48 36"
+          d="M56 8C40 10 28 20 16 36"
           stroke="currentColor"
           strokeWidth="5"
           strokeLinecap="round"
         />
         <path
-          d="M32 30L50 38L42 18"
+          d="M32 30L14 38L22 18"
           stroke="currentColor"
           strokeWidth="5"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
       </svg>
+      <p className="mb-1.5 font-script text-right text-[1.55rem] italic leading-none">
+        drag / browse
+      </p>
     </div>
   );
 }
