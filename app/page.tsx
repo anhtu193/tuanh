@@ -1,6 +1,7 @@
 import FadeIn from "@/components/FadeIn";
 import FindMeSection from "@/components/FindMeSection";
 import FoldText from "@/components/FoldText";
+import HologramPeek from "@/components/HologramPeek";
 import ProjectsCarousel from "@/components/projects/ProjectsCarousel";
 import SiteFooter from "@/components/SiteFooter";
 import SplitText from "@/components/SplitText";
@@ -28,6 +29,7 @@ export default async function Home() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 py-16 sm:px-6 md:px-8">
+      <HologramPeek />
       <main className="flex flex-1 flex-col justify-center">
         <div className="mx-auto w-full max-w-md max-md:pr-44">
           <h1 className="text-3xl font-semibold tracking-tight">

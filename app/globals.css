@@ -138,6 +138,23 @@ select,
   touch-action: pan-y;
 }
 
+.holo-peek {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .holo-peek {
+    display: block;
+    position: fixed;
+    top: calc(50% - 11rem);
+    left: 0;
+    z-index: 16;
+    width: 248px;
+    outline: none;
+    cursor: pointer;
+  }
+}
+
 /* Light: compact warm pool. Dark: black-on-#121212 needs real blur
    (no negative spread) plus drop-shadow so 3D/opacity flattening
    does not eat the box-shadow. */
