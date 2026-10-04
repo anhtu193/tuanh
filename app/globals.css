@@ -73,10 +73,23 @@ html,
 body {
   background: var(--background);
   color: var(--foreground);
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Keep typing fields selectable; CTAs keep their own cursor classes */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Mobile Safari / in-app browsers clip the 64px rope box otherwise */

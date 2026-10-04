@@ -62,7 +62,7 @@ const FOLD_TEXT_STYLES = `.fold-text {
   line-height: 0.95;
   letter-spacing: -0.04em;
   white-space: pre-wrap;
-  user-select: text;
+  user-select: none;
 }
 
 .fold-text-sr-only {
