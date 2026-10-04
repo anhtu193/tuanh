@@ -1,4 +1,5 @@
-import type { ProjectInput } from "@/lib/types";
+import { isSimpleIconKey } from "@/lib/stack-icons";
+import type { ProjectInput, SiteProfileInput } from "@/lib/types";
 
 const TITLE_MAX = 120;
 const DESCRIPTION_MAX = 2000;
@@ -6,6 +7,11 @@ const URL_MAX = 500;
 const TECH_MAX = 20;
 const TECH_LENGTH = 40;
 const PUBLIC_ID_MAX = 255;
+const STACK_MAX = 20;
+const STACK_TITLE_MAX = 40;
+const STACK_ICON_MAX = 80;
+const LINKS_MAX = 12;
+const LINK_LABEL_MAX = 40;
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -123,6 +129,87 @@ export function parseProjectInput(body: unknown): ProjectInput {
     technologies,
     visible,
   };
+}
+
+function requiredLinkUrl(value: unknown, label: string) {
+  if (typeof value !== "string") {
+    throw validationError(`${label} is required`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw validationError(`${label} is required`);
+  }
+  if (trimmed.length > URL_MAX) {
+    throw validationError(`${label} is too long`);
+  }
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw validationError(`${label} must be an http(s) or mailto URL`);
+  }
+  if (
+    url.protocol !== "http:" &&
+    url.protocol !== "https:" &&
+    url.protocol !== "mailto:"
+  ) {
+    throw validationError(`${label} must be an http(s) or mailto URL`);
+  }
+  return trimmed;
+}
+
+export function parseSiteProfileInput(body: unknown): SiteProfileInput {
+  if (!body || typeof body !== "object") {
+    throw validationError("Invalid profile");
+  }
+  const record = body as Record<string, unknown>;
+
+  if (!Array.isArray(record.stack)) {
+    throw validationError("Stack must be a list");
+  }
+  if (record.stack.length > STACK_MAX) {
+    throw validationError("Too many stack items");
+  }
+  const stack = record.stack.map((item, index) => {
+    if (!item || typeof item !== "object") {
+      throw validationError(`Stack item ${index + 1} is invalid`);
+    }
+    const entry = item as Record<string, unknown>;
+    const icon = requiredString(
+      entry.icon,
+      `Stack item ${index + 1} icon`,
+      STACK_ICON_MAX,
+    );
+    if (!/^Si[A-Za-z0-9]+$/.test(icon) || !isSimpleIconKey(icon)) {
+      throw validationError(`Stack item ${index + 1} icon is unknown`);
+    }
+    const title = requiredString(
+      entry.title,
+      `Stack item ${index + 1} title`,
+      STACK_TITLE_MAX,
+    );
+    const href = optionalHttpUrl(entry.href, `Stack item ${index + 1} URL`);
+    return href ? { icon, title, href } : { icon, title };
+  });
+
+  if (!Array.isArray(record.links)) {
+    throw validationError("Links must be a list");
+  }
+  if (record.links.length > LINKS_MAX) {
+    throw validationError("Too many links");
+  }
+  const links = record.links.map((item, index) => {
+    if (!item || typeof item !== "object") {
+      throw validationError(`Link ${index + 1} is invalid`);
+    }
+    const link = item as Record<string, unknown>;
+    return {
+      label: requiredString(link.label, `Link ${index + 1} label`, LINK_LABEL_MAX),
+      url: requiredLinkUrl(link.url, `Link ${index + 1} URL`),
+    };
+  });
+
+  return { stack, links };
 }
 
 export function slugify(title: string) {

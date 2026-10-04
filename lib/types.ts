@@ -23,3 +23,24 @@ export type ProjectInput = {
   technologies: string[];
   visible: boolean;
 };
+
+export type FindMeLink = {
+  label: string;
+  url: string;
+};
+
+export type StackItem = {
+  icon: string;
+  title: string;
+  href?: string;
+};
+
+export type SiteProfile = {
+  stack: StackItem[];
+  links: FindMeLink[];
+};
+
+export type SiteProfileInput = {
+  stack: StackItem[];
+  links: FindMeLink[];
+};

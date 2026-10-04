@@ -44,6 +44,14 @@ export async function ensureSchema() {
         ALTER TABLE projects
         ADD COLUMN IF NOT EXISTS visible boolean NOT NULL DEFAULT true
       `;
+      await db`
+        CREATE TABLE IF NOT EXISTS site_profile (
+          id text PRIMARY KEY,
+          stack jsonb NOT NULL DEFAULT '[]'::jsonb,
+          links jsonb NOT NULL DEFAULT '[]'::jsonb,
+          updated_at timestamptz NOT NULL
+        )
+      `;
     })().catch((error: unknown) => {
       schemaReady = null;
       throw error;

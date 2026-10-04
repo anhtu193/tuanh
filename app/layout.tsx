@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Caveat, Geist, Geist_Mono } from "next/font/google";
+import ClickSpark from "@/components/ClickSpark";
 import PullCordToggle from "@/components/PullCordToggle";
 import "./globals.css";
 
@@ -40,8 +41,10 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
       </head>
       <body className="flex min-h-dvh flex-col bg-background text-foreground">
-        <PullCordToggle />
-        {children}
+        <ClickSpark className="flex min-h-dvh flex-1 flex-col">
+          <PullCordToggle />
+          {children}
+        </ClickSpark>
       </body>
     </html>
   );
